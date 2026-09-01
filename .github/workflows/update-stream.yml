@@ -5,6 +5,9 @@ on:
     - cron: '0 */6 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   update:
     runs-on: ubuntu-latest
@@ -30,3 +33,5 @@ jobs:
           git config --local user.name "GitHub Action"
           git add maspero.m3u
           git diff --quiet && git diff --staged --quiet || (git commit -m "Auto-update: Maspero stream URL" && git push)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
