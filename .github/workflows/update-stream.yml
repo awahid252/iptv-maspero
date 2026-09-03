@@ -1,7 +1,7 @@
 name: Update Maspero Stream URL
 on:
   schedule:
-    - cron: '0 */2 * * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 permissions:
@@ -11,15 +11,21 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Force Write M3U File Directly
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Install dependencies
         run: |
-          echo "#EXTM3U" > maspero.m3u
-          echo "#EXTINF:-1 tvg-name=\"Maspero Zaman\" tvg-id=\"maspero.zaman\" group-title=\"Egypt\" tvg-logo=\"https://dmcdn.net\",Maspero Zaman" >> maspero.m3u
-          echo "https://dailymotion.com" >> maspero.m3u
-
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
+          
+      - name: Extract Stream URL
+        run: python extract_url.py
+        
       - name: Commit and push changes
         run: |
           git config --local user.email "action@github.com"
