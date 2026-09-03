@@ -1,133 +1,74 @@
-import requests
-from bs4 import BeautifulSoup
+import os
 import re
 from datetime import datetime
 
-MASPERO_URL = "https://www.maspero.eg/stream/6"
-DM_API = "https://www.dailymotion.com/player/metadata/video/{}"
-
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    )
-}
-
-def fetch_page(url):
-    """Fetch a webpage with proper headers."""
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=15)
-        response.raise_for_status()
-        return response.text
-    except Exception as e:
-        print(f"❌ Error fetching {url}: {e}")
-        return None
-
-
-def extract_m3u8_from_html(html):
-    """Extract .m3u8 URLs using multiple regex patterns."""
-    patterns = [
-        r'https://[^\s"\'<>]+\.m3u8[^\s"\'<>]*',
-        r'"src"\s*:\s*"(https://[^"]+\.m3u8[^"]*)"',
-        r'src=["\']([^"\']+\.m3u8[^"\']*)["\']',
-    ]
-
-    for pattern in patterns:
-        matches = re.findall(pattern, html)
-        if matches:
-            print(f"🔍 Found stream using pattern: {pattern[:40]}")
-            return matches[0]
-
-    return None
-
-
-def extract_dailymotion_id(html):
-    """Extract Dailymotion video ID (starts with x...)."""
-    match = re.search(r'x[a-z0-9]{6,}', html)
-    return match.group(0) if match else None
-
-
-def fetch_dailymotion_stream(video_id):
-    """Fetch the real .m3u8 stream from Dailymotion metadata."""
-    try:
-        metadata_url = DM_API.format(video_id)
-        print(f"🔄 Fetching Dailymotion metadata: {metadata_url}")
-        data = requests.get(metadata_url, headers=HEADERS, timeout=15).json()
-
-        # Dailymotion stores streams under "qualities"
-        qualities = data.get("qualities", {})
-        if "auto" in qualities:
-            stream = qualities["auto"][0]["url"]
-            print("🎥 Dailymotion stream extracted successfully")
-            return stream
-
-        print("⚠️ No auto-quality stream found in metadata")
-        return None
-
-    except Exception as e:
-        print(f"❌ Error fetching Dailymotion metadata: {e}")
-        return None
-
-
+# We use standard library code to avoid script errors if a library acts up
 def extract_stream_url():
-    """Main extraction logic."""
-    print("🔄 Fetching Maspero Zaman page...")
-    html = fetch_page(MASPERO_URL)
-    if not html:
+    """Simulate opening the browser and capturing DevTools Network logs"""
+    target_url = "https://www.maspero.eg/stream/6"
+    
+    try:
+        # We import playwright inside the function so it doesn't block loading
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("❌ Playwright library is missing from the environment.")
         return None
 
-    print("🔍 Searching for direct .m3u8 stream...")
-    stream_url = extract_m3u8_from_html(html)
+    captured_url = None
 
-    if stream_url:
-        print(f"✅ Direct stream found: {stream_url}")
-        return stream_url
+    print(f"🔄 Opening browser DevTools simulation for: {target_url}")
+    with sync_playwright() as p:
+        # Launch a headless background browser instance
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
 
-    print("⚠️ No direct stream found — trying Dailymotion fallback...")
-    video_id = extract_dailymotion_id(html)
+        # Step 3 & 4: Monitor the Network log events for Fetch/XHR m3u8 targets
+        def handle_response(response):
+            nonlocal captured_url
+            url = response.url
+            # Filter for the specific live stream chunk playlists you saw in DevTools
+            if ".m3u8" in url and "sec2" in url:
+                if not captured_url:  # Keep the first match found
+                    print(f"🎯 DevTools Network Match Found: {url[:80]}...")
+                    captured_url = url
 
-    if video_id:
-        print(f"📹 Dailymotion video ID found: {video_id}")
-        return fetch_dailymotion_stream(video_id)
+        # Attach our network traffic inspector listener
+        page.on("response", handle_response)
 
-    print("❌ No stream found at all")
-    return None
+        try:
+            # Step 1: Navigate to the web page and wait up to 30 seconds for player traffic to load
+            page.goto(target_url, timeout=30000, wait_until="networkidle")
+            # Give the hidden video player 5 extra seconds to fire its background streams
+            page.wait_for_timeout(5000)
+        except Exception as e:
+            print(f"⚠️ Page load took too long, checking if any URLs were captured anyway: {e}")
 
+        browser.close()
+
+    return captured_url
 
 def create_m3u(stream_url):
-    """Write the M3U playlist file."""
+    """Update maspero.m3u with the captured network stream url layout"""
     if not stream_url:
-        print("⚠️ No stream URL found — using fallback Maspero page")
-        stream_url = MASPERO_URL
+        print("❌ DevTools network sniff failed. Reverting to static live layout.")
+        stream_url = "https://dailymotion.com"
 
-    m3u_content = f"""#EXTM3U
-#EXTINF:-1 tvg-name="Maspero Zaman" tvg-id="maspero.zaman" group-title="Egypt" tvg-logo="https://s2.dmcdn.net/y/3ElO1gAN-BkcNTD7",Maspero Zaman
-{stream_url}
-"""
+    m3u_content = (
+        f"#EXTM3U\n"
+        f"#EXTINF:-1 tvg-name=\"Maspero Zaman\" tvg-id=\"maspero.zaman\" group-title=\"Egypt\" tvg-logo=\"https://dmcdn.net\",Maspero Zaman\n"
+        f"{stream_url}\n"
+    )
 
     try:
-        with open("maspero.m3u", "w", encoding="utf-8") as f:
+        with open('maspero.m3u', 'w', encoding='utf-8') as f:
             f.write(m3u_content)
-
-        print("✅ M3U file updated successfully")
-        print(f"📅 Updated at: {datetime.now()}")
-        print(f"🔗 Stream URL: {stream_url}")
+        print("✅ maspero.m3u updated successfully with the active DevTools URL.")
+        print(f"📅 Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         return True
-
     except Exception as e:
-        print(f"❌ Error writing M3U file: {e}")
+        print(f"❌ Error writing M3U file layout properties: {e}")
         return False
 
-
 if __name__ == "__main__":
-    print("=" * 60)
-    print("🔄 Starting Maspero Zaman stream extraction...")
-    print("=" * 60)
-
     url = extract_stream_url()
     create_m3u(url)
-
-    print("=" * 60)
-    print("✅ Process completed!")
-    print("=" * 60)
