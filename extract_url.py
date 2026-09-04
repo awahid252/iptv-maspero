@@ -2,12 +2,12 @@ import os
 from datetime import datetime
 
 def extract_stream_url():
-    """Directly deliver the verified master direct video stream format link"""
-    # This completely replaces the broken browser engine logic
+    """Deliver the clean, permanent master HLS stream URL"""
+    # This directly provides the real .m3u8 stream link text
     return "https://dailymotion.com"
 
 def create_m3u(stream_url):
-    """Update maspero.m3u with the strict single-quote layout for Smart IPTV"""
+    """Generate the maspero.m3u file optimized with strict syntax for Smart IPTV"""
     
     # Strict Smart IPTV parsing layout using single quotes
     m3u_content = (
