@@ -7,7 +7,7 @@ def extract_stream_url():
     Step 1: Open the website
     Step 2 & 3: Simulate accessing DevTools & Network tab
     Step 4, 5 & 6: Inspect Fetch/XHR network logs for request URLs ending in m3u8
-    Step 7: Copy the full URL string
+    Step 7: Copy the full URL string (Filtering specifically for Master Playlist with Audio)
     """
     target_url = "https://www.maspero.eg/stream/6"
     captured_url = None
@@ -35,12 +35,17 @@ def extract_stream_url():
             
             # Look for the streaming playlist endpoints ending with m3u8
             if ".m3u8" in url and "sec2" in url:
-                if not captured_url:  # Capture the first live stream manifest found
-                    print(f"🎯 DevTools Network Match Found: {url[:80]}...")
-                    captured_url = url
+                # CRITICAL FIX: Ensure we do NOT capture isolated resolution files (like live-h264-240.m3u8)
+                # Dailymotion master manifests usually contain /dm/3/ or /dm/5/ or simply "master.m3u8"
+                is_video_only = re.search(r'live-h264-\d+', url)
+                
+                if not is_video_only:
+                    if not captured_url:  # Capture the first true master manifest found
+                        print(f"🎯 DevTools Network Master Match Found: {url[:80]}...")
+                        captured_url = url
 
         # Attach the network sniffing tool to the page
-        page.on("response", inspect_network_traffic)
+        page.on(r"response", inspect_network_traffic)
 
         try:
             # Step 1: Open the page and wait for background elements to process
@@ -68,7 +73,7 @@ def create_m3u(stream_url):
     # Smart IPTV compatible layout using single quotes, proper spacing, and fixed logos
     m3u_content = (
         "#EXTM3U\n"
-        "#EXTINF:-1 tvg-name='Maspero Zaman' tvg-id='maspero.zaman' group-title='Egypt' tvg-logo='https://dmcdn.net Zaman\n"
+        "#EXTINF:-1 tvg-name='Maspero Zaman' tvg-id='maspero.zaman' group-title='Egypt' tvg-logo='https://dmcdn.net' Zaman\n"
         f"{cleaned_url}\n"
     )
 
