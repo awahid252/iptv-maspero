@@ -35,12 +35,13 @@ def extract_stream_url():
             
             # Look for the streaming playlist endpoints ending with m3u8
             if ".m3u8" in url and "sec2" in url:
-                # STRATEGY: Always capture the newest asset seen. Master combined files load last.
+                # Rule 1: Master Manifest found (has combined video + audio). Lock it permanently.
                 if "live-h264-" not in url and "live-aac-" not in url:
                     captured_url = url
-                # Reliable fallback: Accumulate the highest tier variant streams if master is blocked
-                elif "live-h264-720" in url or "live-h264-1080" in url or "live-h264-480" in url:
-                    captured_url = url
+                # Rule 2: Fallback variant track, only allowed if a Master Manifest hasn't locked it yet
+                elif not captured_url or "live-h264-" in captured_url:
+                    if "live-h264-720" in url or "live-h264-1080" in url or "live-h264-480" in url:
+                        captured_url = url
 
 
 
