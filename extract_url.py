@@ -28,7 +28,7 @@ def extract_stream_url():
         )
         page = context.new_page()
 
-             # Event listener matching Step 4, 5 & 6 (Sniffing Fetch/XHR network links)
+                    # Event listener matching Step 4, 5 & 6 (Sniffing Fetch/XHR network links)
         def inspect_network_traffic(response):
             nonlocal captured_url
             url = response.url
@@ -41,6 +41,7 @@ def extract_stream_url():
                 # Reliable fallback: Accumulate the highest tier variant streams if master is blocked
                 elif "live-h264-720" in url or "live-h264-1080" in url or "live-h264-480" in url:
                     captured_url = url
+
 
 
         # Attach the network sniffing tool to the page
