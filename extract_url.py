@@ -33,7 +33,7 @@ def extract_stream_url():
             nonlocal captured_url
             url = response.url
             
-            # Look for the streaming playlist endpoints ending with m3u8 (Bypassing split video & split audio tracks)
+            # Look for the streaming playlist endpoints ending with m3u8
             if ".m3u8" in url and "sec2" in url and "live-h264-" not in url and "live-aac-" not in url:
                 if not captured_url:  # Capture the first live stream manifest found
                     print(f"🎯 DevTools Network Match Found: {url[:80]}...")
