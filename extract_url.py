@@ -7,9 +7,9 @@ def extract_stream_url():
     Step 1: Open the website
     Step 2 & 3: Simulate accessing DevTools & Network tab
     Step 4, 5 & 6: Inspect Fetch/XHR network logs for request URLs ending in m3u8
-    Step 7: Copy the full Master Manifest URL string containing BOTH video and audio
+    Step 7: Copy the full URL string
     """
-    target_url = "https://maspero.eg"
+    target_url = "https://www.maspero.eg/stream/6"
     captured_url = None
 
     try:
@@ -35,15 +35,11 @@ def extract_stream_url():
             
             # Look for the streaming playlist endpoints ending with m3u8
             if ".m3u8" in url and "sec2" in url:
-                # FIX: We drop individual audio-only tracks (live-aac) AND video-only tracks (live-h264).
-                # We want the True Master Playlist manifest which pairs both together.
-                is_isolated_video = "live-h264-" in url
-                is_isolated_audio = "live-aac-" in url
-                
-                # We prioritize the main root stream index file (often ends with live.m3u8 or master structure)
-                if not is_isolated_video and not is_isolated_audio:
-                    if not captured_url:  
-                        print(f"🎯 DevTools Network Master Match Found (Audio + Video): {url[:80]}...")
+                # --- FIXED AUDIO TRACK FILTER ---
+                # Drop isolated video chunks or audio fallbacks to safely latch onto the master manifest
+                if "live-h264-" not in url and "live-aac-" not in url:
+                    if not captured_url:  # Capture the first live stream manifest found
+                        print(f"🎯 DevTools Network Match Found: {url[:80]}...")
                         captured_url = url
 
         # Attach the network sniffing tool to the page
@@ -75,7 +71,7 @@ def create_m3u(stream_url):
     # Smart IPTV compatible layout using single quotes, proper spacing, and fixed logos
     m3u_content = (
         "#EXTM3U\n"
-        "#EXTINF:-1 tvg-name='Maspero Zaman' tvg-id='maspero.zaman' group-title='Egypt' tvg-logo='https://dmcdn.net' Zaman\n"
+        "#EXTINF:-1 tvg-name='Maspero Zaman' tvg-id='maspero.zaman' group-title='Egypt' tvg-logo='https://dmcdn.net Zaman\n"
         f"{cleaned_url}\n"
     )
 
