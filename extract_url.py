@@ -28,20 +28,20 @@ def extract_stream_url():
         )
         page = context.new_page()
 
-     # Event listener matching Step 4, 5 & 6 (Sniffing Fetch/XHR network links)
+             # Event listener matching Step 4, 5 & 6 (Sniffing Fetch/XHR network links)
         def inspect_network_traffic(response):
             nonlocal captured_url
             url = response.url
             
             # Look for the streaming playlist endpoints ending with m3u8
             if ".m3u8" in url and "sec2" in url:
-                # Prioritize Master Playlist if available
+                # STRATEGY: Always capture the newest asset seen. Master combined files load last.
                 if "live-h264-" not in url and "live-aac-" not in url:
                     captured_url = url
-                # Otherwise, lock onto high-definition video streams that package audio natively
+                # Reliable fallback: Accumulate the highest tier variant streams if master is blocked
                 elif "live-h264-720" in url or "live-h264-1080" in url or "live-h264-480" in url:
-                    if not captured_url or "live-h264-" in captured_url:
-                        captured_url = url
+                    captured_url = url
+
 
         # Attach the network sniffing tool to the page
         page.on("response", inspect_network_traffic)
