@@ -35,12 +35,15 @@ def extract_stream_url():
             
             # Look for the streaming playlist endpoints ending with m3u8
             if ".m3u8" in url and "sec2" in url:
-                # --- FIXED AUDIO TRACK FILTER ---
-                # Drop isolated video chunks or audio fallbacks to safely latch onto the master manifest
+                # --- BULLETPROOF AUDIO & VIDEO FILTER ---
+                # Strategy: Prioritize a true master manifest. If a sub-track shows up, 
+                # keep updating 'captured_url' with it ONLY if it is higher resolution than a 240p file.
                 if "live-h264-" not in url and "live-aac-" not in url:
-                    if not captured_url:  # Capture the first live stream manifest found
-                        print(f"🎯 DevTools Network Match Found: {url[:80]}...")
-                        captured_url = url
+                    # Found a true master manifest file
+                    captured_url = url
+                elif "live-h264-240" not in url and "live-aac-" not in url:
+                    # Fallback option: Latch onto high quality tracks (720p/480p) which carry integrated audio
+                    captured_url = url
 
         # Attach the network sniffing tool to the page
         page.on("response", inspect_network_traffic)
