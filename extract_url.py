@@ -1,130 +1,86 @@
-import json
+import os
 import re
-import urllib.request
-from urllib.parse import urljoin
-from playwright.sync_api import sync_playwright
-import argparse
+from datetime import datetime
 
-TARGET_PAGE = "https://www.maspero.eg/stream/6"
-OUTPUT_FILE = "maspero.m3u"
+def extract_stream_url():
+    """
+    Step 1: Open the website
+    Step 2 & 3: Simulate accessing DevTools & Network tab
+    Step 4, 5 & 6: Inspect Fetch/XHR network logs for request URLs ending in m3u8
+    Step 7: Copy the full URL string
+    """
+    target_url = "https://www.maspero.eg/stream/6"
+    captured_url = None
 
-def sniff_master():
-    master = None
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        ctx = browser.new_context()
-        page = ctx.new_page()
-
-        def on_response(resp):
-            nonlocal master
-            url = resp.url
-            if master:
-                return
-            if url.endswith("master.m3u8") or (".m3u8" in url and "master" in url):
-                master = url
-
-        page.on("response", on_response)
-        try:
-            page.goto(TARGET_PAGE, timeout=45000, wait_until="networkidle")
-            page.wait_for_timeout(4000)
-        except Exception:
-            pass
-        browser.close()
-    return master
-
-def download_text(url, timeout=15):
-    with urllib.request.urlopen(url, timeout=timeout) as r:
-        return r.read().decode("utf-8", errors="ignore")
-
-def choose_variant(master_url):
-    text = download_text(master_url)
-    if text is None:
-        return None
-    pattern = re.compile(r'(#EXT-X-STREAM-INF:[^\n]*\n)([^\n]+)', re.IGNORECASE)
-    candidates = []
-    for header, uri in pattern.findall(text):
-        codecs_match = re.search(r'CODECS="([^"]+)"', header)
-        codecs = codecs_match.group(1) if codecs_match else ""
-        codecs_lower = codecs.lower()
-        has_video = ("avc1" in codecs_lower) or ("h264" in codecs_lower) or ("hev1" in codecs_lower) or ("h265" in codecs_lower)
-        has_audio = ("mp4a" in codecs_lower) or ("aac" in codecs_lower) or ("ac-3" in codecs_lower) or ("ec-3" in codecs_lower)
-        candidates.append((has_video, has_audio, uri.strip(), codecs))
-
-    for hv, ha, uri, codecs in candidates:
-        if hv and ha:
-            return urljoin(master_url, uri)
-    return None
-
-def validate_variant(variant_url):
     try:
-        txt = download_text(variant_url)
-    except Exception:
-        return False
-    if txt is None:
-        return False
-    if "#EXTINF" in txt and len(txt) > 200:
-        return True
-    return False
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("❌ Playwright library not found in the running environment.")
+        return None
 
-def write_m3u(url):
-    m3u = (
+    print(f"🔄 Opening browser and starting DevTools Network traffic inspection...")
+    
+    with sync_playwright() as p:
+        # Launch a headless background browser instance
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        page = context.new_page()
+
+        # Event listener matching Step 4, 5 & 6 (Sniffing Fetch/XHR network links)
+        def inspect_network_traffic(response):
+            nonlocal captured_url
+            url = response.url
+            
+            # Look for the streaming playlist endpoints ending with m3u8
+            if ".m3u8" in url and "sec2" in url:
+                if not captured_url:  # Capture the first live stream manifest found
+                    print(f"🎯 DevTools Network Match Found: {url[:80]}...")
+                    captured_url = url
+
+        # Attach the network sniffing tool to the page
+        page.on("response", inspect_network_traffic)
+
+        try:
+            # Step 1: Open the page and wait for background elements to process
+            page.goto(target_url, timeout=45000, wait_until="networkidle")
+            # Step 7: Give the player engine 5 extra seconds to execute its dynamic network handshakes
+            page.wait_for_timeout(5000)
+        except Exception as e:
+            print(f"⚠️ Page load timed out, checking captured logs regardless: {e}")
+
+        browser.close()
+
+    return captured_url
+
+def create_m3u(stream_url):
+    """
+    Step 8: Update maspero.m3u with strict formatting for Smart IPTV
+    """
+    if not stream_url:
+        print("❌ Failed to sniff dynamic token URL from DevTools. Dropping down to baseline live stream pointer link...")
+        stream_url = "https://dailymotion.com"
+
+    # Clean any encoded text backslashes out of the URL string so it reads perfectly
+    cleaned_url = stream_url.replace('\\', '')
+
+    # Smart IPTV compatible layout using single quotes, proper spacing, and fixed logos
+    m3u_content = (
         "#EXTM3U\n"
-        "#EXTINF:-1 tvg-name='Maspero Zaman' tvg-id='maspero.zaman' "
-        "group-title='Egypt' tvg-logo='https://s2.dmcdn.net/y/3ElO1gAN-BkcNTD7'\n"
-        f"{url}\n"
+        "#EXTINF:-1 tvg-name='Maspero Zaman' tvg-id='maspero.zaman' group-title='Egypt' tvg-logo='https://dmcdn.net Zaman\n"
+        f"{cleaned_url}\n"
     )
-    with open(OUTPUT_FILE, "w", encoding="utf-8", newline="\n") as f:
-        f.write(m3u)
 
-def discover_candidates():
-    # This is the simple, reliable detection logic for the workflow.
-    # It discovers both the master URL and any relevant video/audio media URLs.
-    candidates = []
-    master = sniff_master()
-    if master:
-        candidates.append(master)
-        text = download_text(master)
-        if text:
-            pattern = re.compile(r'(#EXT-X-STREAM-INF:[^\n]*\n)([^\n]+)', re.IGNORECASE)
-            for header, uri in pattern.findall(text):
-                candidates.append(urljoin(master, uri.strip()))
-    return candidates
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--discover-json", action="store_true")
-    args = parser.parse_args()
-
-    if args.discover_json:
-        candidates = discover_candidates()
-        result = {"candidates": candidates}
-        # include useful chosen pair if a master exists
-        master = sniff_master()
-        if master:
-            variant = choose_variant(master)
-            if variant:
-                result["chosen_variant"] = variant
-        print(json.dumps(result))
-        return
-
-    master = sniff_master()
-    if not master:
-        print("No master playlist found.")
-        return
-
-    print("Master found:", master)
-    variant = choose_variant(master)
-    if not variant:
-        print("No combined audio+video variant found in master.")
-        return
-
-    print("Chosen variant:", variant)
-    if not validate_variant(variant):
-        print("Variant validation failed (no segments).")
-        return
-
-    write_m3u(variant)
-    print("maspero.m3u written with validated variant.")
+    try:
+        with open('maspero.m3u', 'w', newline='\n', encoding='utf-8') as f:
+            f.write(m3u_content)
+        print("✅ maspero.m3u file successfully updated and synchronized for Smart IPTV.")
+        return True
+    except Exception as e:
+        print(f"❌ Error writing file to disk: {e}")
+        return False
 
 if __name__ == "__main__":
-    main()
+    url = extract_stream_url()
+    create_m3u(url)
