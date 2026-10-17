@@ -30,23 +30,20 @@ def sniff_master():
         browser.close()
     return master
 
-
 def download_text(url, timeout=15):
     with urllib.request.urlopen(url, timeout=timeout) as r:
         return r.read().decode("utf-8", errors="ignore")
 
-
 def _parse_attributes(attr_str):
     # Parse a comma-separated list of key=value pairs where values may be quoted
     attrs = {}
-    for m in re.finditer(r'([A-Z0-9-]+)=((?:"[^"]*")|[^,\n]+)', attr_str, flags=re.IGNORECASE):
+    for m in re.finditer(r'([A-Z0-9-]+)=((?:\"[^\"]*\")|[^,\n]+)', attr_str, flags=re.IGNORECASE):
         k = m.group(1).upper()
         v = m.group(2)
         if v.startswith('"') and v.endswith('"'):
             v = v[1:-1]
         attrs[k] = v
     return attrs
-
 
 def extract_variants(master_url):
     """
@@ -113,7 +110,6 @@ def extract_variants(master_url):
 
     return audio_groups, stream_variants
 
-
 def choose_variant(master_url):
     # If there is a combined variant we prefer it. Otherwise pair the best video-only variant with an audio playlist from its AUDIO group.
     audio_groups, variants = extract_variants(master_url)
@@ -151,7 +147,6 @@ def choose_variant(master_url):
     # nothing usable found
     return None
 
-
 def validate_variant_pair(pair):
     # pair is dict returned from choose_variant
     if not pair:
@@ -168,7 +163,6 @@ def validate_variant_pair(pair):
     # if video is a variant but is short, still allow (sometimes small files)
     return True
 
-
 def write_m3u(url):
     m3u = (
         "#EXTM3U\n"
@@ -178,7 +172,6 @@ def write_m3u(url):
     )
     with open(OUTPUT_FILE, "w", encoding="utf-8", newline="\n") as f:
         f.write(m3u)
-
 
 def main():
     master = sniff_master()
