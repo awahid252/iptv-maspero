@@ -1,27 +1,49 @@
 #!/usr/bin/env python3
 """
-extract_url.py
+Enhanced extract_url.py
+- Aggressive HLS sniffer (Playwright + HTML scanning)
+- Prefers video media playlist when writing maspero.m3u
+- Optional --restream: runs ffmpeg to combine video+audio into single HLS output
+- Starts a simple HTTP server to serve the HLS output and writes maspero.m3u pointing to the local URL
+- By default ffmpeg re-encodes audio to AAC stereo for maximum IPTV compatibility
 
-- Finds HLS master/media playlists on the target page (maspero).
-- Prefers video media playlists when writing maspero.m3u.
-- Optional: --restream to automatically run ffmpeg to merge video+audio into an HLS output.
+Usage examples:
+  python extract_url.py               # just discover and write maspero.m3u (video media pref)
+  python extract_url.py --restream    # combine & serve; writes maspero.m3u pointing at local served HLS
+  python extract_url.py --restream --foreground  # run ffmpeg in foreground (shows logs)
+  python extract_url.py --restream --header "Referer: https://www.maspero.eg" --header "User-Agent: Mozilla/5.0"
+
+Requirements:
+  pip install playwright
+  python -m playwright install
+  ffmpeg on PATH (or pass --ffmpeg /path/to/ffmpeg.exe)
+
 """
+
 import re
 import os
 import sys
 import argparse
 import shlex
 import subprocess
+import threading
+import socket
+import time
 from urllib.parse import urljoin
 import urllib.request
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
+# Defaults
 TARGET_PAGE = "https://www.maspero.eg/stream/6"
 DEFAULT_OUTPUT_FILE = "maspero.m3u"
-DEFAULT_OUTPUT_DIR = "hls_out"
-
+DEFAULT_OUTDIR = "hls_out"
+HTTP_PORT = 8000
 HEADLESS = True
 WAIT_AFTER_LOAD_MS = 4000
+
+# --- utilities -----------------------------------------------------------------
 
 def download_text(url, timeout=15):
     try:
@@ -31,12 +53,28 @@ def download_text(url, timeout=15):
         print(f"[download_text] failed to GET {url}: {e}")
         return None
 
-def sniff_master_aggressive(target_page):
+
+def get_local_ip():
+    # attempt to discover a non-loopback IP used for outbound connections
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # doesn't have to be reachable
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+    except Exception:
+        ip = "127.0.0.1"
+    finally:
+        s.close()
+    return ip
+
+# --- Playwright sniffing ------------------------------------------------------
+
+def sniff_master_aggressive(target_page, headless=True):
     candidates = set()
     print("[sniff] starting Playwright...")
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=HEADLESS)
+            browser = p.chromium.launch(headless=headless)
             ctx = browser.new_context()
             page = ctx.new_page()
 
@@ -61,10 +99,10 @@ def sniff_master_aggressive(target_page):
 
             try:
                 content = page.content()
-                found = set(re.findall(r'https?://[^\'"\s>]+\.m3u8(?:\?[^\'"\s>]*)?', content, flags=re.IGNORECASE))
+                found = set(re.findall(r'https?://[^\'\"\s>]+\.m3u8(?:\?[^\'\"\s>]*)?', content, flags=re.IGNORECASE))
                 for u in found:
                     candidates.add(u)
-                rel_found = set(re.findall(r'["\']([^"\']+\.m3u8(?:\?[^"\']*)?)["\']', content, flags=re.IGNORECASE))
+                rel_found = set(re.findall(r'[\"']([^\"']+\.m3u8(?:\?[^\"']*)?)[\"']', content, flags=re.IGNORECASE))
                 for r in rel_found:
                     full = urljoin(page.url, r)
                     candidates.add(full)
@@ -95,6 +133,8 @@ def sniff_master_aggressive(target_page):
         return list(candidates)
     return list(candidates)
 
+# --- basic page scan ---------------------------------------------------------
+
 def scan_page_html_for_m3u8(url):
     print(f"[scan] fetching page HTML via urllib: {url}")
     text = download_text(url)
@@ -102,13 +142,15 @@ def scan_page_html_for_m3u8(url):
     if not text:
         print("[scan] no HTML fetched")
         return []
-    for u in re.findall(r'https?://[^\'"\s>]+\.m3u8(?:\?[^\'"\s>]*)?', text, flags=re.IGNORECASE):
+    for u in re.findall(r'https?://[^\'\"\s>]+\.m3u8(?:\?[^\'\"\s>]*)?', text, flags=re.IGNORECASE):
         found.add(u)
-    for r in re.findall(r'["\']([^"\']+\.m3u8(?:\?[^"\']*)?)["\']', text, flags=re.IGNORECASE):
+    for r in re.findall(r'[\"']([^\"']+\.m3u8(?:\?[^\"']*)?)[\"']', text, flags=re.IGNORECASE):
         full = urljoin(url, r)
         found.add(full)
     print(f"[scan] found {len(found)} candidate m3u8 URLs in page HTML")
     return list(found)
+
+# --- m3u8 parsing helpers ----------------------------------------------------
 
 def _parse_attributes(attr_str):
     attrs = {}
@@ -119,6 +161,7 @@ def _parse_attributes(attr_str):
             v = v[1:-1]
         attrs[k] = v
     return attrs
+
 
 def extract_variants(master_url):
     text = download_text(master_url)
