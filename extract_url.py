@@ -32,29 +32,23 @@ def extract_streams():
 
 
 def select_best_streams(urls):
-    video_streams = []
-    audio_streams = []
+    # STRICT FILTERING — only real audio/video streams
+    video_streams = [u for u in urls if "live-h264-" in u.lower()]
+    audio_streams = [u for u in urls if "live-aac-" in u.lower()]
 
-    # Categorize streams
-    for u in urls:
-        if "h264" in u.lower():
-            video_streams.append(u)
-        if "aac" in u.lower():
-            audio_streams.append(u)
-
-    if not video_streams or not audio_streams:
-        print("❌ Could not find both audio and video streams.")
+    if not video_streams:
+        print("❌ No video streams found.")
+        return None, None
+    if not audio_streams:
+        print("❌ No audio streams found.")
         return None, None
 
-    # Extract resolution or bitrate numbers
+    # Extract numeric quality (240, 480, 64, 128)
     def extract_number(url):
         nums = re.findall(r"(\d+)", url)
         return max([int(n) for n in nums]) if nums else 0
 
-    # Highest resolution video
     best_video = sorted(video_streams, key=extract_number, reverse=True)[0]
-
-    # Highest bitrate audio
     best_audio = sorted(audio_streams, key=extract_number, reverse=True)[0]
 
     print(f"🎥 Best video stream: {best_video}")
