@@ -1,5 +1,20 @@
+import os
 import re
 from playwright.sync_api import sync_playwright
+
+# ---------------------------------------------------------------------------
+# Where maspero_master.m3u8 will be publicly reachable.
+# Inside GitHub Actions, GITHUB_REPOSITORY ("user/repo") is set automatically,
+# so the URL is built for you. Override with the MASTER_PUBLIC_URL env var if
+# you host the files elsewhere (e.g. GitHub Pages).
+# ---------------------------------------------------------------------------
+BRANCH = os.environ.get("GITHUB_REF_NAME", "main")
+REPO = os.environ.get("GITHUB_REPOSITORY", "YOUR_USER/YOUR_REPO")
+MASTER_PUBLIC_URL = os.environ.get(
+    "MASTER_PUBLIC_URL",
+    f"https://raw.githubusercontent.com/{REPO}/{BRANCH}/maspero_master.m3u8",
+)
+
 
 def extract_streams():
     target_url = "https://www.maspero.eg/stream/6"
@@ -14,7 +29,7 @@ def extract_streams():
 
         def sniff(response):
             url = response.url
-            if ".m3u8" in url:
+            if ".m3u8" in url and url not in m3u8_urls:
                 print(f"📡 Found playlist: {url}")
                 m3u8_urls.append(url)
 
@@ -57,21 +72,38 @@ def select_best_streams(urls):
     return best_video, best_audio
 
 
-def create_master_playlist(video_url, audio_url):
-    master = f"""#EXTM3U
+def create_playlists(video_url, audio_url):
+    # 1) HLS master playlist (combined audio + video) -> .m3u8
+    master = (
+        "#EXTM3U\n"
+        "#EXT-X-VERSION:4\n"
+        "#EXT-X-INDEPENDENT-SEGMENTS\n"
+        '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="AAC",LANGUAGE="ar",'
+        f'DEFAULT=YES,AUTOSELECT=YES,URI="{audio_url}"\n'
+        '#EXT-X-STREAM-INF:BANDWIDTH=1500000,CODECS="avc1.4d401f,mp4a.40.2",AUDIO="audio"\n'
+        f"{video_url}\n"
+    )
 
-#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="AAC",DEFAULT=YES,AUTOSELECT=YES,URI="{audio_url}"
-
-#EXT-X-STREAM-INF:BANDWIDTH=1500000,CODECS="avc1.4d401f,mp4a.40.2",AUDIO="audio"
-{video_url}
-"""
+    # 2) SmartIPTV channel list -> .m3u (EXTINF entries only, no HLS tags)
+    channel_list = (
+        "#EXTM3U\n"
+        '#EXTINF:-1 tvg-id="maspero" tvg-name="Maspero" group-title="Egypt",Maspero (Combined)\n'
+        f"{MASTER_PUBLIC_URL}\n"
+        '#EXTINF:-1 tvg-id="maspero-video" group-title="Egypt",Maspero (Video only)\n'
+        f"{video_url}\n"
+        '#EXTINF:-1 tvg-id="maspero-audio" group-title="Egypt",Maspero (Audio only)\n'
+        f"{audio_url}\n"
+    )
 
     try:
-        with open("maspero.m3u", "w", encoding="utf-8") as f:
+        with open("maspero_master.m3u8", "w", encoding="utf-8", newline="\n") as f:
             f.write(master)
-        print("✅ maspero.m3u created with combined audio + video.")
+        with open("maspero.m3u", "w", encoding="utf-8", newline="\n") as f:
+            f.write(channel_list)
+        print("✅ maspero_master.m3u8 (combined HLS) created.")
+        print("✅ maspero.m3u (SmartIPTV channel list) created.")
     except Exception as e:
-        print(f"❌ Error writing playlist: {e}")
+        print(f"❌ Error writing playlists: {e}")
 
 
 if __name__ == "__main__":
@@ -79,4 +111,4 @@ if __name__ == "__main__":
     video, audio = select_best_streams(urls)
 
     if video and audio:
-        create_master_playlist(video, audio)
+        create_playlists(video, audio)
