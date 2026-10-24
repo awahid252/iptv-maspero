@@ -2,6 +2,6 @@
 #EXTINF:-1 tvg-id="maspero" tvg-name="Maspero" group-title="Egypt",Maspero (Combined)
 https://raw.githubusercontent.com/awahid252/iptv-maspero/main/maspero_master.m3u8
 #EXTINF:-1 tvg-id="maspero-video" group-title="Egypt",Maspero (Video only)
-https://live.eu-north-1a.cf.dmcdn.net/sec2(moiEWYUMCIkOKo_cgTtb3B0bK_GUqgWA2rudiGDtGb-F8HmSrXWZ-DpuT8dAWHgnSNXY9mLQIQAKlCvGHYTw9FEV9ac1bX_Bs-PfcnfUnDQCTqmT9yE1_eKwlyUQBotqvje4zRr4miCIqKQm3VFfqpqfXsF98OvP8eYpYZo_9O-tpEOgElNITVOxo5OxtLCk)/dm/4/x8n6e4h/live-h264-240.m3u8
+https://live.eu-north-1a.cf.dmcdn.net/sec2(eUjHP17icrUxipsk3FXcj63jeBMIQSQGNuaUtS0vntTsZSaBaSuf5Yln97Tx995y5Zd-e71KnpzH5VAin6aQatNBqls3h_HsuaPmWR5jVqkUcq-Ez44rFA4CsmMyWTap0uIecM2uWlGUn3rWhVlnGvVOLJkxR_ZbDJSmMx5cLUrhQb6027fxZkdL0XPWxf9o)/dm/4/x8n6e4h/live-h264-240.m3u8
 #EXTINF:-1 tvg-id="maspero-audio" group-title="Egypt",Maspero (Audio only)
-https://live.eu-north-1a.cf.dmcdn.net/sec2(moiEWYUMCIkOKo_cgTtb3B0bK_GUqgWA2rudiGDtGb-F8HmSrXWZ-DpuT8dAWHgnSNXY9mLQIQAKlCvGHYTw9FEV9ac1bX_Bs-PfcnfUnDQCTqmT9yE1_eKwlyUQBotqvje4zRr4miCIqKQm3VFfqpqfXsF98OvP8eYpYZo_9O-tpEOgElNITVOxo5OxtLCk)/dm/4/x8n6e4h/live-aac-64.m3u8
+https://live.eu-north-1a.cf.dmcdn.net/sec2(eUjHP17icrUxipsk3FXcj63jeBMIQSQGNuaUtS0vntTsZSaBaSuf5Yln97Tx995y5Zd-e71KnpzH5VAin6aQatNBqls3h_HsuaPmWR5jVqkUcq-Ez44rFA4CsmMyWTap0uIecM2uWlGUn3rWhVlnGvVOLJkxR_ZbDJSmMx5cLUrhQb6027fxZkdL0XPWxf9o)/dm/4/x8n6e4h/live-aac-64.m3u8
